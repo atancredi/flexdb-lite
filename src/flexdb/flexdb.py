@@ -1,6 +1,8 @@
 import sqlite3
 import json
 
+# XXX add primary key to table: can i treat a json field as primary key? is it expensive?
+
 class FlexDB:
     def __init__(self, db_name, table_name="flex"):
         self.conn = sqlite3.connect(db_name)
@@ -36,7 +38,7 @@ class FlexDB:
         except sqlite3.IntegrityError:
             print("Error: Database rejected invalid JSON data.")
 
-        return self
+        return self.cursor.lastrowid
 
     def select(self, key, value):
         """Find key/value pair in the rows of a JSON table"""
@@ -54,6 +56,21 @@ class FlexDB:
             results.append(data)
         return results
 
+    def _get_raw(self, where_clause="", params=()):
+        """Fetch and parse rows"""
+        query = f"SELECT id, json_data, created_at FROM {self.table_name} {where_clause} ORDER BY created_at DESC"
+        self.cursor.execute(query, params)
+        
+        results = []
+        for row in self.cursor.fetchall():
+            record_id, json_str, created_at = row
+            data = json.loads(json_str)
+            # Flatten ID and Timestamp into the main dict for the UI/API
+            data['id'] = record_id
+            data['created_at'] = created_at
+            results.append(data)
+        return results
+
     def update_field(self, record_id, key, new_value):
         """Update a field in the JSON table"""
 
@@ -66,6 +83,7 @@ class FlexDB:
 
         return self
 
+    # TODO update_row
 
     def delete(self, record_id):
         self.cursor.execute(f"DELETE FROM {self.table_name} WHERE id = ?", (record_id,))
